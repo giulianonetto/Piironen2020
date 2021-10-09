@@ -1,0 +1,27 @@
+---
+title: Cool project name
+author: Cool author name
+output: html_document
+---
+
+```{r setup, include = FALSE}
+# Set knitr options ------------------------------------------------------------
+knitr::opts_chunk$set(
+    echo = FALSE
+)
+
+
+# Load packages ----------------------------------------------------------------
+library(tidyverse)
+
+
+# Source auxiliary R files -----------------------------------------------------
+source("R/functions.R")
+```
+
+# Analysis
+
+## Part 1
+```{r part-1}
+1 + 1
+```
