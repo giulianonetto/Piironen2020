@@ -1,13 +1,13 @@
 ---
-title: Cool project name
-author: Cool author name
+title: Reproducing Piironen2020
+author: Giuliano
 output: html_document
 ---
 
 ```{r setup, include = FALSE}
 # Set knitr options ------------------------------------------------------------
 knitr::opts_chunk$set(
-    echo = FALSE
+  echo = FALSE
 )
 
 
@@ -19,9 +19,286 @@ library(tidyverse)
 source("R/functions.R")
 ```
 
-# Analysis
+# Generate data
 
-## Part 1
-```{r part-1}
-1 + 1
+The function `generate_data_01` returns a `data.frame` with y and x variables according to the data generating process from equation (1) in [Piironen (2020)](https://doi.org/10.1214/20-EJS1711). The first `p_rel` x variables should be pairwise correlated with $\rho = 0.3$ (for this example) and have marginal variances equal to $1$. The remaining x variables should be independent, standard normal random variables.
+
+Generate the data.
+
+```{r}
+fake_data <- generate_data_01(N = 1e4, p = 10, rho = 0.3, p_rel = 5)
+head(fake_data)
 ```
+
+Check if correlations match. 
+
+```{r part-1}
+
+fake_data %>% 
+  select(-y) %>% 
+  cor() %>% data.frame() %>% rownames_to_column('name0') %>% 
+  pivot_longer(col = contains('X')) %>% 
+  mutate(name0 = factor(name0, levels = paste0("X", 1:10)),
+         name = factor(name, levels = paste0("X", 1:10))) %>% 
+  ggplot(aes(name0, name, fill = value)) +
+  geom_tile() +
+  geom_text(aes(label = round(value, 2)), color = "white") +
+  labs(x = NULL, y = NULL, fill = "Correlation")
+```
+
+Check if marginal variances match.
+
+```{r}
+hist(matrixStats::colVars(as.matrix(fake_data[,-1])),
+     main = "X variances")
+```
+
+Good enough! Let's generate a realization following the specifications in the paper.
+
+```{r}
+df <- generate_data_01(
+  N = 50,
+  p = 500,
+  rho = 0.3,
+  p_rel = 50
+)
+```
+
+
+# Reference model
+
+In the experiment from Fig 7, the authors performed Supervised Principal Component analysis and used the first 3 PCs in their regression. I will do a simplified version of their workflow using simple linear regression on the computed PCs and using $\gamma = 0.1$ as the (absolute) correlation threshold in the screening step before PCA.
+
+```{r}
+features_to_keep <- df %>% 
+  select(-y) %>% 
+  map_lgl(~ abs(cor(.x, df$y)) > 0.1)
+pca <- prcomp(df[, features_to_keep])
+new_X <- pca$x[, 1:3] 
+```
+
+Out of 150 relevant features, with this screening we kept
+
+```{r}
+sum(paste0("X", 1:150) %in% names(features_to_keep[features_to_keep]))
+```
+
+for further processing with PCA. A total of
+
+```{r}
+sum(features_to_keep)
+```
+
+features passed the screening (out of 500).
+
+Using `y` and `new_X`, we fit the reference model.
+
+```{r}
+df_reduced <- data.frame(
+  y = df$y,
+  new_X
+)
+ref_model <- lm(
+  y ~ PC1 + PC2 + PC3,
+  data = df_reduced
+)
+```
+
+# Benefit of a reference model (LASSO only)
+
+The authors make the claim that a reference model may be useful in selecting variables because it generates an estimate of $f$, $f_*$, which hopefully increases the discrimination between 'bad' and 'good' features. Let's see if that holds with LASSO alone.
+
+Fit the models
+
+```{r}
+# install.packages('glmnet')
+library(glmnet)
+
+X <- as.matrix(df[, -1])
+y <- df[, 1]
+y_ref <- predict(ref_model)
+fit_no_ref <- cv.glmnet(X, y)
+fit_ref <- cv.glmnet(X, y_ref)
+```
+
+Generate large test set for external validation.
+
+```{r}
+test_data <- generate_data_01(
+  N = 1e5,
+  p = 500,
+  rho = 0.3,
+  p_rel = 50
+)
+```
+
+Compute performance for the model without reference model.
+
+```{r}
+preds_no_ref <- predict(fit_no_ref, 
+                        newx = as.matrix(test_data[, -1]),
+                        s = "lambda.1se")
+rmse_no_ref <- rmse(preds_no_ref[, 1], test_data$y) %>% round(2)
+str_glue("RMSE without reference: {rmse_no_ref}")
+```
+
+With the reference model.
+
+```{r}
+preds_ref <- predict(fit_ref, 
+                     newx = as.matrix(test_data[, -1]),
+                     s = "lambda.1se")
+rmse_ref <- rmse(preds_ref[, 1], test_data$y) %>% round(2)
+str_glue("RMSE with reference: {rmse_ref}")
+```
+
+The model with reference seems better. Let's look at the regularization paths.
+
+```{r}
+par(mfrow = c(1,2))
+plot(fit_no_ref, ylim = c(0,2.5), main = "LASSO")
+plot(fit_ref, ylim = c(0,2.5), main = "LASSO + reference model")
+```
+
+
+This thing seems to work! Let's encapsulate everything we've done inside a function and then repeat this simulation multiple times.
+
+```{r}
+simulate_reference_model_effect <- function(
+  N = 50,
+  p = 500,
+  rho = 0.3,
+  p_rel = 150,
+  gamma = 0.1,
+  PCs_to_keep = 3,
+  sim = NULL
+) {
+  
+  if (!is.null(sim)) {
+    print(str_glue("Simulation: {sim}"))
+  }
+  
+  # generate observations
+  df <- generate_data_01(N = N, p = p, rho = rho, p_rel = p_rel)
+  
+  # screen features + SPCA
+  features_to_keep <- df %>% 
+    select(-y) %>% 
+    map_lgl(~ abs(cor(.x, df$y)) > gamma)
+  pca <- prcomp(df[, features_to_keep])
+  new_X <- pca$x[, 1:PCs_to_keep]
+  
+  # fit reference model
+  df_reduced <- data.frame(y = df$y, new_X)
+  ref_model <- lm(y ~ ., data = df_reduced)
+  
+  # fit LASSO models
+  X <- as.matrix(df[, -1])
+  y <- df[, 1]
+  y_ref <- predict(ref_model)
+  fit_no_ref <- glmnet::cv.glmnet(X, y)
+  fit_ref <- glmnet::cv.glmnet(X, y_ref)
+  
+  # generate test data
+  test_data <- generate_data_01(
+    N = 20000,
+    p = p,
+    rho = rho,
+    p_rel = p_rel
+  )
+  
+  # test predictions without reference
+  preds_no_ref <- predict(fit_no_ref, 
+                          newx = as.matrix(test_data[, -1]),
+                          s = "lambda.1se")
+  rmse_no_ref <- rmse(preds_no_ref[, 1], test_data$y) %>% round(2)
+  
+  # test predictions with reference
+  preds_ref <- predict(fit_ref, 
+                       newx = as.matrix(test_data[, -1]),
+                       s = "lambda.1se")
+  rmse_ref <- rmse(preds_ref[, 1], test_data$y) %>% round(2)
+  
+  # get sizes of each model (number of variables selected)
+  b_no_ref <- coef(fit_no_ref, s = 'lambda.1se') %>% as.matrix()
+  b_ref <- coef(fit_ref, s = 'lambda.1se') %>% as.matrix()
+  size_no_ref <- sum(abs(b_no_ref) > 0 )
+  size_ref <- sum(abs(b_ref) > 0 )
+  
+  # get proportion of (in) correctly selected variables
+  kept_no_ref <- rownames(b_no_ref)[abs(b_no_ref) > 0][-1]
+  kept_ref <- rownames(b_ref)[abs(b_ref) > 0][-1]
+  rel_features <- paste0("X", 1:p_rel)
+  tp_no_ref <- sum(rel_features %in% kept_no_ref)
+  tp_ref <- sum(rel_features %in% kept_ref)
+  fp_no_ref <- sum(!(kept_no_ref %in% rel_features))
+  fp_ref <- sum(!(kept_ref %in% rel_features))
+  
+  return(data.frame(
+    rmse_no_ref, rmse_ref,
+    size_no_ref, size_ref,
+    tp_no_ref, tp_ref,
+    fp_no_ref, fp_ref
+  ))
+}
+```
+
+Let's simulate 100 realizations of the experiment.
+
+```{r, max.height='100px'}
+simulation <- map(1:100, ~ simulate_reference_model_effect(sim = .x)) %>% 
+  bind_rows(.id = "sim")
+```
+
+Plot the results.
+
+```{r}
+library(patchwork)
+theme_set(theme_bw())
+
+p1 <- simulation %>% 
+  pivot_longer(cols = contains('rmse')) %>% 
+  mutate(
+    name = ifelse(name == "rmse_ref",
+                  "LASSO + reference model",
+                  "LASSO")
+  ) %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot() +
+  labs(x = NULL, y = "RMSE")
+p2 <- simulation %>% 
+  pivot_longer(cols = contains('size')) %>% 
+  mutate(
+    name = ifelse(name == "size_ref",
+                  "LASSO + reference model",
+                  "LASSO")
+  ) %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot() +
+  labs(x = NULL, y = "# kept variables")
+p3 <- simulation %>% 
+  pivot_longer(cols = contains('tp')) %>% 
+  mutate(
+    name = ifelse(name == "tp_ref",
+                  "LASSO + reference model",
+                  "LASSO")
+  ) %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot() +
+  labs(x = NULL, y = "# TP")
+p4 <- simulation %>% 
+  pivot_longer(cols = contains('fp')) %>% 
+  mutate(
+    name = ifelse(name == "fp_ref",
+                  "LASSO + reference model",
+                  "LASSO")
+  ) %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot() +
+  labs(x = NULL, y = "# FP")
+
+(p1 + p2) / (p3 + p4)
+```
+
+Cool! Let's scale up and test varying sample sizes and $\rho$ values.
+
