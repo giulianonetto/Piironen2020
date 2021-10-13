@@ -7,7 +7,7 @@ output: html_document
 ```{r setup, include = FALSE}
 # Set knitr options ------------------------------------------------------------
 knitr::opts_chunk$set(
-  echo = FALSE
+  echo = TRUE
 )
 
 
@@ -27,7 +27,9 @@ Generate the data.
 
 ```{r}
 fake_data <- generate_data_01(N = 1e4, p = 10, rho = 0.3, p_rel = 5)
-head(fake_data)
+head(fake_data) %>% 
+  kableExtra::kable() %>% 
+  kableExtra::kable_styling()
 ```
 
 Check if correlations match. 
@@ -60,7 +62,7 @@ df <- generate_data_01(
   N = 50,
   p = 500,
   rho = 0.3,
-  p_rel = 50
+  p_rel = 150
 )
 ```
 
@@ -128,7 +130,7 @@ test_data <- generate_data_01(
   N = 1e5,
   p = 500,
   rho = 0.3,
-  p_rel = 50
+  p_rel = 150
 )
 ```
 
@@ -172,10 +174,11 @@ simulate_reference_model_effect <- function(
   gamma = 0.1,
   PCs_to_keep = 3,
   sim = NULL,
-  test_data = NULL
+  test_data = NULL,
+  .verbose = FALSE
 ) {
   
-  if (!is.null(sim)) {
+  if (!is.null(sim) & isTRUE(.verbose)) {
     print(str_glue("Simulation: {sim}"))
   }
   
@@ -214,18 +217,18 @@ simulate_reference_model_effect <- function(
   preds_no_ref <- predict(fit_no_ref, 
                           newx = as.matrix(test_data[, -1]),
                           s = "lambda.1se")
-  rmse_no_ref <- rmse(preds_no_ref[, 1], test_data$y) %>% round(2)
+  rmse_no_ref <- rmse(preds_no_ref[, 1], test_data$y)
   
   # test predictions with reference
   preds_ref <- predict(fit_ref, 
                        newx = as.matrix(test_data[, -1]),
                        s = "lambda.1se")
-  rmse_ref <- rmse(preds_ref[, 1], test_data$y) %>% round(2)
+  rmse_ref <- rmse(preds_ref[, 1], test_data$y)
   
   # test predictions of reference model
   new_X_test <- predict(pca, newdata = test_data[, features_to_keep])
   preds_ref_model <- predict(ref_model, newdata =  data.frame(new_X_test))
-  rmse_ref_model <- rmse(preds_ref_model, test_data$y) %>% round(2)
+  rmse_ref_model <- rmse(preds_ref_model, test_data$y)
   
   # get sizes of each model (number of variables selected)
   b_no_ref <- coef(fit_no_ref, s = 'lambda.1se') %>% as.matrix()
@@ -234,7 +237,7 @@ simulate_reference_model_effect <- function(
   size_ref <- sum(abs(b_ref) > 0 )
   
   # get proportion of (in) correctly selected variables
-  kept_no_ref <- rownames(b_no_ref)[abs(b_no_ref) > 0][-1]
+  kept_no_ref <- rownames(b_no_ref)[abs(b_no_ref) > 0][-1]  # exclude intercept
   kept_ref <- rownames(b_ref)[abs(b_ref) > 0][-1]
   rel_features <- paste0("X", 1:p_rel)
   tp_no_ref <- sum(rel_features %in% kept_no_ref)
@@ -276,9 +279,9 @@ p1 <- simulation %>%
   pivot_longer(cols = contains('rmse')) %>% 
   mutate(
     name = case_when(
-      name == "rmse_ref" ~ "LASSO + reference model",
+      name == "rmse_ref" ~ "LASSO + ref",
       name == "rmse_no_ref" ~"LASSO",
-      T ~ "Reference (SPCA)"
+      T ~ "Ref (SPCA)"
     )
   ) %>% 
   ggplot(aes(name, value)) +
@@ -288,9 +291,9 @@ p2 <- simulation %>%
   pivot_longer(cols = contains('size')) %>% 
   mutate(
     name = case_when(
-      name == "size_ref" ~ "LASSO + reference model",
+      name == "size_ref" ~ "LASSO + ref",
       name == "size_no_ref" ~"LASSO",
-      T ~ "Reference (SPCA)"
+      T ~ "Ref (SPCA)"
     )
   ) %>% 
   ggplot(aes(name, value)) +
@@ -300,9 +303,9 @@ p3 <- simulation %>%
   pivot_longer(cols = contains('tp')) %>% 
   mutate(
     name = case_when(
-      name == "tp_ref" ~ "LASSO + reference model",
+      name == "tp_ref" ~ "LASSO + ref",
       name == "tp_no_ref" ~"LASSO",
-      T ~ "Reference (SPCA)"
+      T ~ "Ref (SPCA)"
     )
   ) %>% 
   ggplot(aes(name, value)) +
@@ -312,17 +315,19 @@ p4 <- simulation %>%
   pivot_longer(cols = contains('fp')) %>% 
   mutate(
     name = case_when(
-      name == "fp_ref" ~ "LASSO + reference model",
+      name == "fp_ref" ~ "LASSO + ref",
       name == "fp_no_ref" ~"LASSO",
-      T ~ "Reference (SPCA)"
+      T ~ "Ref (SPCA)"
     )
   ) %>% 
   ggplot(aes(name, value)) +
   geom_boxplot(alpha = 0, width = .5, lwd = 1) +
-  labs(x = NULL, y = "# FP")
+  labs(x = NULL, y = "# FP") 
 
 (p1 + p2) / (p3 + p4)
 ```
+
+Showing the observed values for each simulation.
 
 ```{r}
 f <- function(p) {
@@ -333,7 +338,7 @@ f <- function(p) {
       position = ggbeeswarm::position_quasirandom(width = .2)
     ) +
     geom_point(
-      alpha = .5,
+      alpha = .3,
       position = ggbeeswarm::position_quasirandom(width = .2)
     ) 
 }
