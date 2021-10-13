@@ -171,7 +171,8 @@ simulate_reference_model_effect <- function(
   p_rel = 150,
   gamma = 0.1,
   PCs_to_keep = 3,
-  sim = NULL
+  sim = NULL,
+  test_data = NULL
 ) {
   
   if (!is.null(sim)) {
@@ -185,7 +186,8 @@ simulate_reference_model_effect <- function(
   features_to_keep <- df %>% 
     select(-y) %>% 
     map_lgl(~ abs(cor(.x, df$y)) > gamma)
-  pca <- prcomp(df[, features_to_keep])
+  df_subset <- df[, features_to_keep]
+  pca <- prcomp(df_subset)
   new_X <- pca$x[, 1:PCs_to_keep]
   
   # fit reference model
@@ -200,13 +202,14 @@ simulate_reference_model_effect <- function(
   fit_ref <- glmnet::cv.glmnet(X, y_ref)
   
   # generate test data
-  test_data <- generate_data_01(
-    N = 20000,
-    p = p,
-    rho = rho,
-    p_rel = p_rel
-  )
-  
+  if (is.null(test_data)) {
+    test_data <- generate_data_01(
+      N = 5e4,
+      p = p,
+      rho = rho,
+      p_rel = p_rel
+    )
+  }
   # test predictions without reference
   preds_no_ref <- predict(fit_no_ref, 
                           newx = as.matrix(test_data[, -1]),
@@ -218,6 +221,11 @@ simulate_reference_model_effect <- function(
                        newx = as.matrix(test_data[, -1]),
                        s = "lambda.1se")
   rmse_ref <- rmse(preds_ref[, 1], test_data$y) %>% round(2)
+  
+  # test predictions of reference model
+  new_X_test <- predict(pca, newdata = test_data[, features_to_keep])
+  preds_ref_model <- predict(ref_model, newdata =  data.frame(new_X_test))
+  rmse_ref_model <- rmse(preds_ref_model, test_data$y) %>% round(2)
   
   # get sizes of each model (number of variables selected)
   b_no_ref <- coef(fit_no_ref, s = 'lambda.1se') %>% as.matrix()
@@ -235,7 +243,7 @@ simulate_reference_model_effect <- function(
   fp_ref <- sum(!(kept_ref %in% rel_features))
   
   return(data.frame(
-    rmse_no_ref, rmse_ref,
+    rmse_no_ref, rmse_ref, rmse_ref_model,
     size_no_ref, size_ref,
     tp_no_ref, tp_ref,
     fp_no_ref, fp_ref
@@ -246,7 +254,15 @@ simulate_reference_model_effect <- function(
 Let's simulate 100 realizations of the experiment.
 
 ```{r, max.height='100px'}
-simulation <- map(1:100, ~ simulate_reference_model_effect(sim = .x)) %>% 
+set.seed(123)
+test_ix <- sample(1:nrow(test_data), 1e4)
+simulation <- map(
+  1:100,
+  ~ simulate_reference_model_effect(
+    sim = .x, 
+    test_data = test_data[test_ix,]
+  )
+) %>% 
   bind_rows(.id = "sim")
 ```
 
@@ -259,46 +275,76 @@ theme_set(theme_bw())
 p1 <- simulation %>% 
   pivot_longer(cols = contains('rmse')) %>% 
   mutate(
-    name = ifelse(name == "rmse_ref",
-                  "LASSO + reference model",
-                  "LASSO")
+    name = case_when(
+      name == "rmse_ref" ~ "LASSO + reference model",
+      name == "rmse_no_ref" ~"LASSO",
+      T ~ "Reference (SPCA)"
+    )
   ) %>% 
   ggplot(aes(name, value)) +
-  geom_boxplot() +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
   labs(x = NULL, y = "RMSE")
 p2 <- simulation %>% 
   pivot_longer(cols = contains('size')) %>% 
   mutate(
-    name = ifelse(name == "size_ref",
-                  "LASSO + reference model",
-                  "LASSO")
+    name = case_when(
+      name == "size_ref" ~ "LASSO + reference model",
+      name == "size_no_ref" ~"LASSO",
+      T ~ "Reference (SPCA)"
+    )
   ) %>% 
   ggplot(aes(name, value)) +
-  geom_boxplot() +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
   labs(x = NULL, y = "# kept variables")
 p3 <- simulation %>% 
   pivot_longer(cols = contains('tp')) %>% 
   mutate(
-    name = ifelse(name == "tp_ref",
-                  "LASSO + reference model",
-                  "LASSO")
+    name = case_when(
+      name == "tp_ref" ~ "LASSO + reference model",
+      name == "tp_no_ref" ~"LASSO",
+      T ~ "Reference (SPCA)"
+    )
   ) %>% 
   ggplot(aes(name, value)) +
-  geom_boxplot() +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
   labs(x = NULL, y = "# TP")
 p4 <- simulation %>% 
   pivot_longer(cols = contains('fp')) %>% 
   mutate(
-    name = ifelse(name == "fp_ref",
-                  "LASSO + reference model",
-                  "LASSO")
+    name = case_when(
+      name == "fp_ref" ~ "LASSO + reference model",
+      name == "fp_no_ref" ~"LASSO",
+      T ~ "Reference (SPCA)"
+    )
   ) %>% 
   ggplot(aes(name, value)) +
-  geom_boxplot() +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
   labs(x = NULL, y = "# FP")
 
 (p1 + p2) / (p3 + p4)
 ```
 
+```{r}
+f <- function(p) {
+  p + 
+    geom_line(
+      aes(group = sim),
+      alpha = .3,
+      position = ggbeeswarm::position_quasirandom(width = .2)
+    ) +
+    geom_point(
+      alpha = .5,
+      position = ggbeeswarm::position_quasirandom(width = .2)
+    ) 
+}
+
+(f(p1) + f(p2)) / (f(p3) + f(p4))
+```
+
+---
+
+questions: what is ref model overfits? what if ref model is overparameterized?
+
 Cool! Let's scale up and test varying sample sizes and $\rho$ values.
+
 
