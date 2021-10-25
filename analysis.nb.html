@@ -410,6 +410,123 @@ plot(fit_ref, ylim = c(0,2.5), main = &quot;LASSO + reference model&quot;)</code
 <p>This thing seems to work! Let’s encapsulate everything we’ve done inside a function and then repeat this simulation multiple times.</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuc2ltdWxhdGVfcmVmZXJlbmNlX21vZGVsX2VmZmVjdCA8LSBmdW5jdGlvbihcbiAgTiA9IDUwLFxuICBwID0gNTAwLFxuICByaG8gPSAwLjMsXG4gIHBfcmVsID0gMTUwLFxuICBnYW1tYSA9IDAuMSxcbiAgUENzX3RvX2tlZXAgPSAzLFxuICBzaW0gPSBOVUxMLFxuICB0ZXN0X2RhdGEgPSBOVUxMLFxuICAudmVyYm9zZSA9IEZBTFNFLFxuICBkYXRhX2dlbl9tZXRob2QgPSBOVUxMLFxuICAuLi5cbikge1xuICBcbiAgaWYgKCFpcy5udWxsKHNpbSkgJiBpc1RSVUUoLnZlcmJvc2UpKSB7XG4gICAgcHJpbnQoc3RyX2dsdWUoXCJTaW11bGF0aW9uOiB7c2ltfVwiKSlcbiAgfVxuICBcbiAgIyBnZW5lcmF0ZSBvYnNlcnZhdGlvbnNcbiAgaWYgKGlzLm51bGwoZGF0YV9nZW5fbWV0aG9kKSkge1xuICAgIGRmIDwtIGdlbmVyYXRlX2RhdGFfMDEoTiA9IE4sIHAgPSBwLCByaG8gPSByaG8sIHBfcmVsID0gcF9yZWwpXG4gIH0gZWxzZSB7XG4gICAgZGYgPC0gZGF0YV9nZW5fbWV0aG9kKE4gPSBOLCBwID0gcCwgcmhvID0gcmhvLCBwX3JlbCA9IHBfcmVsLCAuLi4gPSAuLi4pXG4gIH1cbiAgXG4gIFxuICAjIHNjcmVlbiBmZWF0dXJlcyArIFNQQ0FcbiAgZmVhdHVyZXNfdG9fa2VlcCA8LSBkZiAlPiUgXG4gICAgc2VsZWN0KC15KSAlPiUgXG4gICAgbWFwX2xnbChcbiAgICAgIH4gaWZlbHNlKGFsbCgueD09MSksIFRSVUUsIGFicyhjb3IoLngsIGRmJHkpKSA+IGdhbW1hKVxuICAgIClcbiAgXG4gIGRmX3N1YnNldCA8LSBkZlssIGZlYXR1cmVzX3RvX2tlZXBdXG4gIHBjYSA8LSBwcmNvbXAoZGZfc3Vic2V0KVxuICBuZXdfWCA8LSBwY2EkeFssIDE6UENzX3RvX2tlZXBdXG4gIFxuICAjIGZpdCByZWZlcmVuY2UgbW9kZWxcbiAgZGZfcmVkdWNlZCA8LSBkYXRhLmZyYW1lKHkgPSBkZiR5LCBuZXdfWClcbiAgcmVmX21vZGVsIDwtIGxtKHkgfiAuLCBkYXRhID0gZGZfcmVkdWNlZClcbiAgXG4gICMgZml0IExBU1NPIG1vZGVsc1xuICBYIDwtIGFzLm1hdHJpeChkZlssIC0xXSlcbiAgeSA8LSBkZlssIDFdXG4gIHlfcmVmIDwtIHByZWRpY3QocmVmX21vZGVsKVxuICBmaXRfbm9fcmVmIDwtIGdsbW5ldDo6Y3YuZ2xtbmV0KFgsIHkpXG4gIGZpdF9yZWYgPC0gZ2xtbmV0Ojpjdi5nbG1uZXQoWCwgeV9yZWYpXG4gIFxuICAjIGZpdCBCYXllcyBtb2RlbCBmb3IgcHJvanByZWRcbiAgI2ZpdF9wcm9qIDwtIGZpdF9wcm9qcHJlZChkZiA9IGRmKVxuICBmaXRfcHJvaiA8LSBmaXRfaG9tZW1hZGVfcHJvaihkZiA9IGRmLCBcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZml0X2wxID0gZml0X25vX3JlZixcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgeV9yZWYgPSB5X3JlZilcbiAgXG4gICMgZ2VuZXJhdGUgdGVzdCBkYXRhXG4gIGlmIChpcy5udWxsKHRlc3RfZGF0YSkpIHtcbiAgICBpZiAoaXMubnVsbChkYXRhX2dlbl9tZXRob2QpKSB7XG4gICAgICB0ZXN0X2RhdGEgPC0gZ2VuZXJhdGVfZGF0YV8wMShcbiAgICAgICAgTiA9IDVlNCwgcCA9IHAsIHJobyA9IHJobywgcF9yZWwgPSBwX3JlbFxuICAgICAgKVxuICAgIH0gZWxzZSB7XG4gICAgICB0ZXN0X2RhdGEgPC0gZGF0YV9nZW5fbWV0aG9kKFxuICAgICAgICBOID0gNWU0LCBwID0gcCwgIHJobyA9IHJobywgcF9yZWwgPSBwX3JlbCwgLi4uXG4gICAgICApXG4gICAgfVxuICAgIFxuICB9XG4gICMgdGVzdCBwcmVkaWN0aW9ucyB3aXRob3V0IHJlZmVyZW5jZVxuICBwcmVkc19ub19yZWYgPC0gcHJlZGljdChmaXRfbm9fcmVmLCBcbiAgICAgICAgICAgICAgICAgICAgICAgICAgbmV3eCA9IGFzLm1hdHJpeCh0ZXN0X2RhdGFbLCAtMV0pLFxuICAgICAgICAgICAgICAgICAgICAgICAgICBzID0gXCJsYW1iZGEuMXNlXCIpXG4gIHJtc2Vfbm9fcmVmIDwtIHJtc2UocHJlZHNfbm9fcmVmWywgMV0sIHRlc3RfZGF0YSR5KVxuICBcbiAgIyB0ZXN0IHByZWRpY3Rpb25zIHdpdGggcmVmZXJlbmNlXG4gIHByZWRzX3JlZiA8LSBwcmVkaWN0KGZpdF9yZWYsIFxuICAgICAgICAgICAgICAgICAgICAgICBuZXd4ID0gYXMubWF0cml4KHRlc3RfZGF0YVssIC0xXSksXG4gICAgICAgICAgICAgICAgICAgICAgIHMgPSBcImxhbWJkYS4xc2VcIilcbiAgcm1zZV9yZWYgPC0gcm1zZShwcmVkc19yZWZbLCAxXSwgdGVzdF9kYXRhJHkpXG4gIFxuICAjIHRlc3QgcHJlZGljdGlvbnMgb2YgcmVmZXJlbmNlIG1vZGVsXG4gIG5ld19YX3Rlc3QgPC0gcHJlZGljdChwY2EsIG5ld2RhdGEgPSB0ZXN0X2RhdGFbLCBmZWF0dXJlc190b19rZWVwXSlcbiAgcHJlZHNfcmVmX21vZGVsIDwtIHByZWRpY3QocmVmX21vZGVsLCBuZXdkYXRhID0gIGRhdGEuZnJhbWUobmV3X1hfdGVzdCkpXG4gIHJtc2VfcmVmX21vZGVsIDwtIHJtc2UocHJlZHNfcmVmX21vZGVsLCB0ZXN0X2RhdGEkeSlcbiAgXG4gICMgdGVzdCBwcmVkaWN0aW9ucyBwcm9qcHJlZFxuICBwcmVkc19wcm9qIDwtIHByZWRpY3QoZml0X3Byb2osIG5ld2RhdGEgPSB0ZXN0X2RhdGFbLCAtMV0pXG4gIHJtc2VfcHJvaiA8LSBybXNlKHByZWRzX3Byb2osIHRlc3RfZGF0YSR5KVxuICBcbiAgIyBnZXQgc2l6ZXMgb2YgZWFjaCBtb2RlbCAobnVtYmVyIG9mIHZhcmlhYmxlcyBzZWxlY3RlZClcbiAgYl9ub19yZWYgPC0gY29lZihmaXRfbm9fcmVmLCBzID0gJ2xhbWJkYS4xc2UnKSAlPiUgYXMubWF0cml4KClcbiAgYl9yZWYgPC0gY29lZihmaXRfcmVmLCBzID0gJ2xhbWJkYS4xc2UnKSAlPiUgYXMubWF0cml4KClcbiAgYl9wcm9qIDwtIGNvZWYoZml0X3Byb2opXG4gIHNpemVfbm9fcmVmIDwtIHN1bShhYnMoYl9ub19yZWYpID4gMCApXG4gIHNpemVfcmVmIDwtIHN1bShhYnMoYl9yZWYpID4gMCApXG4gIHNpemVfcHJvaiA8LSBzdW0oYWJzKGJfcHJvaikgPiAwIClcbiAgXG4gICMgZ2V0IHByb3BvcnRpb24gb2YgKGluKSBjb3JyZWN0bHkgc2VsZWN0ZWQgdmFyaWFibGVzXG4gIGtlcHRfbm9fcmVmIDwtIHJvd25hbWVzKGJfbm9fcmVmKVthYnMoYl9ub19yZWYpID4gMF1bLTFdICAjIGV4Y2x1ZGUgaW50ZXJjZXB0XG4gIGtlcHRfcmVmIDwtIHJvd25hbWVzKGJfcmVmKVthYnMoYl9yZWYpID4gMF1bLTFdXG4gIGtlcHRfcHJvaiA8LSBuYW1lcyhiX3Byb2opWy0xXVxuICByZWxfZmVhdHVyZXMgPC0gcGFzdGUwKFwiWFwiLCAxOnBfcmVsKVxuICB0cF9ub19yZWYgPC0gc3VtKHJlbF9mZWF0dXJlcyAlaW4lIGtlcHRfbm9fcmVmKVxuICB0cF9yZWYgPC0gc3VtKHJlbF9mZWF0dXJlcyAlaW4lIGtlcHRfcmVmKVxuICB0cF9wcm9qIDwtIHN1bShyZWxfZmVhdHVyZXMgJWluJSBrZXB0X3Byb2opXG4gIGZwX25vX3JlZiA8LSBzdW0oIShrZXB0X25vX3JlZiAlaW4lIHJlbF9mZWF0dXJlcykpXG4gIGZwX3JlZiA8LSBzdW0oIShrZXB0X3JlZiAlaW4lIHJlbF9mZWF0dXJlcykpXG4gIGZwX3Byb2ogPC0gc3VtKCEoa2VwdF9wcm9qICVpbiUgcmVsX2ZlYXR1cmVzKSlcbiAgXG4gIHJldHVybihkYXRhLmZyYW1lKFxuICAgIHJtc2Vfbm9fcmVmLCBybXNlX3JlZiwgcm1zZV9yZWZfbW9kZWwsIHJtc2VfcHJvaixcbiAgICBzaXplX25vX3JlZiwgc2l6ZV9yZWYsIHNpemVfcHJvaixcbiAgICB0cF9ub19yZWYsIHRwX3JlZiwgdHBfcHJvaixcbiAgICBmcF9ub19yZWYsIGZwX3JlZiwgZnBfcHJvalxuICApKVxufVxuYGBgIn0= -->
+<pre class="r"><code>simulate_reference_model_effect &lt;- function(
+  N = 50,
+  p = 500,
+  rho = 0.3,
+  p_rel = 150,
+  gamma = 0.1,
+  PCs_to_keep = 3,
+  sim = NULL,
+  test_data = NULL,
+  .verbose = FALSE,
+  data_gen_method = NULL,
+  ...
+) {
+  
+  if (!is.null(sim) &amp; isTRUE(.verbose)) {
+    print(str_glue(&quot;Simulation: {sim}&quot;))
+  }
+  
+  # generate observations
+  if (is.null(data_gen_method)) {
+    df &lt;- generate_data_01(N = N, p = p, rho = rho, p_rel = p_rel)
+  } else {
+    df &lt;- data_gen_method(N = N, p = p, rho = rho, p_rel = p_rel, ... = ...)
+  }
+  
+  
+  # screen features + SPCA
+  features_to_keep &lt;- df %&gt;% 
+    select(-y) %&gt;% 
+    map_lgl(
+      ~ ifelse(all(.x==1), TRUE, abs(cor(.x, df$y)) &gt; gamma)
+    )
+  
+  df_subset &lt;- df[, features_to_keep]
+  pca &lt;- prcomp(df_subset)
+  new_X &lt;- pca$x[, 1:PCs_to_keep]
+  
+  # fit reference model
+  df_reduced &lt;- data.frame(y = df$y, new_X)
+  ref_model &lt;- lm(y ~ ., data = df_reduced)
+  
+  # fit LASSO models
+  X &lt;- as.matrix(df[, -1])
+  y &lt;- df[, 1]
+  y_ref &lt;- predict(ref_model)
+  fit_no_ref &lt;- glmnet::cv.glmnet(X, y)
+  fit_ref &lt;- glmnet::cv.glmnet(X, y_ref)
+  
+  # fit Bayes model for projpred
+  #fit_proj &lt;- fit_projpred(df = df)
+  fit_proj &lt;- fit_homemade_proj(df = df, 
+                                fit_l1 = fit_no_ref,
+                                y_ref = y_ref)
+  
+  # generate test data
+  if (is.null(test_data)) {
+    if (is.null(data_gen_method)) {
+      test_data &lt;- generate_data_01(
+        N = 5e4, p = p, rho = rho, p_rel = p_rel
+      )
+    } else {
+      test_data &lt;- data_gen_method(
+        N = 5e4, p = p,  rho = rho, p_rel = p_rel, ...
+      )
+    }
+    
+  }
+  # test predictions without reference
+  preds_no_ref &lt;- predict(fit_no_ref, 
+                          newx = as.matrix(test_data[, -1]),
+                          s = &quot;lambda.1se&quot;)
+  rmse_no_ref &lt;- rmse(preds_no_ref[, 1], test_data$y)
+  
+  # test predictions with reference
+  preds_ref &lt;- predict(fit_ref, 
+                       newx = as.matrix(test_data[, -1]),
+                       s = &quot;lambda.1se&quot;)
+  rmse_ref &lt;- rmse(preds_ref[, 1], test_data$y)
+  
+  # test predictions of reference model
+  new_X_test &lt;- predict(pca, newdata = test_data[, features_to_keep])
+  preds_ref_model &lt;- predict(ref_model, newdata =  data.frame(new_X_test))
+  rmse_ref_model &lt;- rmse(preds_ref_model, test_data$y)
+  
+  # test predictions projpred
+  preds_proj &lt;- predict(fit_proj, newdata = test_data[, -1])
+  rmse_proj &lt;- rmse(preds_proj, test_data$y)
+  
+  # get sizes of each model (number of variables selected)
+  b_no_ref &lt;- coef(fit_no_ref, s = &#39;lambda.1se&#39;) %&gt;% as.matrix()
+  b_ref &lt;- coef(fit_ref, s = &#39;lambda.1se&#39;) %&gt;% as.matrix()
+  b_proj &lt;- coef(fit_proj)
+  size_no_ref &lt;- sum(abs(b_no_ref) &gt; 0 )
+  size_ref &lt;- sum(abs(b_ref) &gt; 0 )
+  size_proj &lt;- sum(abs(b_proj) &gt; 0 )
+  
+  # get proportion of (in) correctly selected variables
+  kept_no_ref &lt;- rownames(b_no_ref)[abs(b_no_ref) &gt; 0][-1]  # exclude intercept
+  kept_ref &lt;- rownames(b_ref)[abs(b_ref) &gt; 0][-1]
+  kept_proj &lt;- names(b_proj)[-1]
+  rel_features &lt;- paste0(&quot;X&quot;, 1:p_rel)
+  tp_no_ref &lt;- sum(rel_features %in% kept_no_ref)
+  tp_ref &lt;- sum(rel_features %in% kept_ref)
+  tp_proj &lt;- sum(rel_features %in% kept_proj)
+  fp_no_ref &lt;- sum(!(kept_no_ref %in% rel_features))
+  fp_ref &lt;- sum(!(kept_ref %in% rel_features))
+  fp_proj &lt;- sum(!(kept_proj %in% rel_features))
+  
+  return(data.frame(
+    rmse_no_ref, rmse_ref, rmse_ref_model, rmse_proj,
+    size_no_ref, size_ref, size_proj,
+    tp_no_ref, tp_ref, tp_proj,
+    fp_no_ref, fp_ref, fp_proj
+  ))
+}</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <p>Let’s simulate 100 realizations of the experiment.</p>

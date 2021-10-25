@@ -69,7 +69,7 @@ fit_homemade_proj <- function(df, fit_l1, y_ref) {
   if (length(coef_l1) > 100) {
     coef_l1 <- coef_l1[1:100]
   }
-  pred_l1 <- predict(fit_l1, newx = as.matrix(df[,-1]), s = 'lambda.1se')
+  #pred_l1 <- predict(fit_l1, newx = as.matrix(df[,-1]), s = 'lambda.1se')
   nsubmodels <- length(coef_l1)
   rmse_sub_models <- vector('numeric', length = nsubmodels)
   best_ix <- NA
