@@ -1,7 +1,9 @@
 ---
 title: Reproducing Piironen2020
 author: Giuliano
-output: html_document
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r setup, include = FALSE}
@@ -13,6 +15,8 @@ knitr::opts_chunk$set(
 
 # Load packages ----------------------------------------------------------------
 library(tidyverse)
+library(brms)
+library(projpred)
 
 
 # Source auxiliary R files -----------------------------------------------------
@@ -113,7 +117,6 @@ The authors make the claim that a reference model may be useful in selecting var
 Fit the models
 
 ```{r}
-# install.packages('glmnet')
 library(glmnet)
 
 X <- as.matrix(df[, -1])
@@ -175,7 +178,9 @@ simulate_reference_model_effect <- function(
   PCs_to_keep = 3,
   sim = NULL,
   test_data = NULL,
-  .verbose = FALSE
+  .verbose = FALSE,
+  data_gen_method = NULL,
+  ...
 ) {
   
   if (!is.null(sim) & isTRUE(.verbose)) {
@@ -183,12 +188,20 @@ simulate_reference_model_effect <- function(
   }
   
   # generate observations
-  df <- generate_data_01(N = N, p = p, rho = rho, p_rel = p_rel)
+  if (is.null(data_gen_method)) {
+    df <- generate_data_01(N = N, p = p, rho = rho, p_rel = p_rel)
+  } else {
+    df <- data_gen_method(N = N, p = p, rho = rho, p_rel = p_rel, ... = ...)
+  }
+  
   
   # screen features + SPCA
   features_to_keep <- df %>% 
     select(-y) %>% 
-    map_lgl(~ abs(cor(.x, df$y)) > gamma)
+    map_lgl(
+      ~ ifelse(all(.x==1), TRUE, abs(cor(.x, df$y)) > gamma)
+    )
+  
   df_subset <- df[, features_to_keep]
   pca <- prcomp(df_subset)
   new_X <- pca$x[, 1:PCs_to_keep]
@@ -204,14 +217,24 @@ simulate_reference_model_effect <- function(
   fit_no_ref <- glmnet::cv.glmnet(X, y)
   fit_ref <- glmnet::cv.glmnet(X, y_ref)
   
+  # fit Bayes model for projpred
+  #fit_proj <- fit_projpred(df = df)
+  fit_proj <- fit_homemade_proj(df = df, 
+                                fit_l1 = fit_no_ref,
+                                y_ref = y_ref)
+  
   # generate test data
   if (is.null(test_data)) {
-    test_data <- generate_data_01(
-      N = 5e4,
-      p = p,
-      rho = rho,
-      p_rel = p_rel
-    )
+    if (is.null(data_gen_method)) {
+      test_data <- generate_data_01(
+        N = 5e4, p = p, rho = rho, p_rel = p_rel
+      )
+    } else {
+      test_data <- data_gen_method(
+        N = 5e4, p = p,  rho = rho, p_rel = p_rel, ...
+      )
+    }
+    
   }
   # test predictions without reference
   preds_no_ref <- predict(fit_no_ref, 
@@ -230,26 +253,35 @@ simulate_reference_model_effect <- function(
   preds_ref_model <- predict(ref_model, newdata =  data.frame(new_X_test))
   rmse_ref_model <- rmse(preds_ref_model, test_data$y)
   
+  # test predictions projpred
+  preds_proj <- predict(fit_proj, newdata = test_data[, -1])
+  rmse_proj <- rmse(preds_proj, test_data$y)
+  
   # get sizes of each model (number of variables selected)
   b_no_ref <- coef(fit_no_ref, s = 'lambda.1se') %>% as.matrix()
   b_ref <- coef(fit_ref, s = 'lambda.1se') %>% as.matrix()
+  b_proj <- coef(fit_proj)
   size_no_ref <- sum(abs(b_no_ref) > 0 )
   size_ref <- sum(abs(b_ref) > 0 )
+  size_proj <- sum(abs(b_proj) > 0 )
   
   # get proportion of (in) correctly selected variables
   kept_no_ref <- rownames(b_no_ref)[abs(b_no_ref) > 0][-1]  # exclude intercept
   kept_ref <- rownames(b_ref)[abs(b_ref) > 0][-1]
+  kept_proj <- names(b_proj)[-1]
   rel_features <- paste0("X", 1:p_rel)
   tp_no_ref <- sum(rel_features %in% kept_no_ref)
   tp_ref <- sum(rel_features %in% kept_ref)
+  tp_proj <- sum(rel_features %in% kept_proj)
   fp_no_ref <- sum(!(kept_no_ref %in% rel_features))
   fp_ref <- sum(!(kept_ref %in% rel_features))
+  fp_proj <- sum(!(kept_proj %in% rel_features))
   
   return(data.frame(
-    rmse_no_ref, rmse_ref, rmse_ref_model,
-    size_no_ref, size_ref,
-    tp_no_ref, tp_ref,
-    fp_no_ref, fp_ref
+    rmse_no_ref, rmse_ref, rmse_ref_model, rmse_proj,
+    size_no_ref, size_ref, size_proj,
+    tp_no_ref, tp_ref, tp_proj,
+    fp_no_ref, fp_ref, fp_proj
   ))
 }
 ```
@@ -258,9 +290,9 @@ Let's simulate 100 realizations of the experiment.
 
 ```{r, max.height='100px'}
 set.seed(123)
-test_ix <- sample(1:nrow(test_data), 1e4)
+test_ix <- sample(1:nrow(test_data), 2e4)
 simulation <- map(
-  1:100,
+  1:500,
   ~ simulate_reference_model_effect(
     sim = .x, 
     test_data = test_data[test_ix,]
@@ -274,6 +306,97 @@ Plot the results.
 ```{r}
 library(patchwork)
 theme_set(theme_bw())
+
+mutate_name <- function(x, pfx) {
+  x %>% 
+    mutate(
+      name = case_when(
+        name == str_glue("{pfx}_ref") ~ "enet + ref",
+        name == str_glue("{pfx}_no_ref") ~ "enet",
+        name == str_glue("{pfx}_proj") ~ "projection",
+        T ~ "Ref (SPCA)"
+      )
+    )
+}
+
+p1 <- simulation %>% 
+  pivot_longer(cols = contains('rmse')) %>% 
+  mutate_name("rmse") %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
+  labs(x = NULL, y = "RMSE")
+p2 <- simulation %>% 
+  pivot_longer(cols = contains('size')) %>% 
+  mutate_name("size") %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
+  labs(x = NULL, y = "# kept variables")
+p3 <- simulation %>% 
+  pivot_longer(cols = contains('tp')) %>% 
+  mutate_name("tp") %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
+  labs(x = NULL, y = "# TP")
+p4 <- simulation %>% 
+  pivot_longer(cols = contains('fp')) %>% 
+  mutate_name("fp") %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
+  labs(x = NULL, y = "# FP") 
+
+(p1 + p2) / (p3 + p4)
+```
+
+Showing the observed values for each simulation.
+
+```{r}
+f <- function(p) {
+  p + 
+    geom_line(
+      aes(group = sim),
+      alpha = .3,
+      position = ggbeeswarm::position_quasirandom(width = .2)
+    ) +
+    geom_point(
+      alpha = .3,
+      position = ggbeeswarm::position_quasirandom(width = .2)
+    ) 
+}
+
+(f(p1) + f(p2)) / (f(p3) + f(p4))
+```
+
+I wonder if this is an artifact of our reference model. Let's use a data generation process that is slightly different and see if the effect remains.
+
+$$
+\begin{align*}
+&y_i \sim \mathcal{N}(\mathbb{X}\beta, 1) \\
+&\beta = \left(\beta_0, \beta_1, \cdots, \beta_{p_{rel}}, 0, 0, \cdots, 0 \right) \\
+&x_{\cdot, 1} = 1 \\ 
+&x_{i,j} \sim \mathcal{N}(0, 1) \ \ \ \ \  i \in \{1, \cdots, N\},\ j \in \{2, \cdots, p\}
+\end{align*}
+$$
+Basically, we will choose a coefficient vector with $p_{rel}$ non-zero terms (one of which is the intercept). The predictors will be mutually independent. For this example, we will sample the non-zero coefficients from an uniform on $[1, 5]$. The intercept will be $10$.
+
+```{r, max.height='100px'}
+set.seed(123)
+.beta <- c(1, runif(p_rel - 1, 50, 100), rep(0, p - p_rel))
+test_data <- generate_data_02(N=1e4)
+set.seed(123)
+simulation <- map(
+  1:100,
+  ~ simulate_reference_model_effect(
+    sim = .x, 
+    data_gen_method = generate_data_02,
+    gamma = 0.1,
+    test_data = test_data,
+    beta = .beta
+  )
+) %>% 
+  bind_rows(.id = "sim")
+```
+
+```{r}
 
 p1 <- simulation %>% 
   pivot_longer(cols = contains('rmse')) %>% 
@@ -327,29 +450,5 @@ p4 <- simulation %>%
 (p1 + p2) / (p3 + p4)
 ```
 
-Showing the observed values for each simulation.
-
-```{r}
-f <- function(p) {
-  p + 
-    geom_line(
-      aes(group = sim),
-      alpha = .3,
-      position = ggbeeswarm::position_quasirandom(width = .2)
-    ) +
-    geom_point(
-      alpha = .3,
-      position = ggbeeswarm::position_quasirandom(width = .2)
-    ) 
-}
-
-(f(p1) + f(p2)) / (f(p3) + f(p4))
-```
-
----
-
-questions: what is ref model overfits? what if ref model is overparameterized?
-
-Cool! Let's scale up and test varying sample sizes and $\rho$ values.
 
 
