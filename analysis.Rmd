@@ -450,5 +450,107 @@ p4 <- simulation %>%
 (p1 + p2) / (p3 + p4)
 ```
 
+Showing the observed values for each simulation.
+
+```{r}
+f <- function(p) {
+  p + 
+    geom_line(
+      aes(group = sim),
+      alpha = .3,
+      position = ggbeeswarm::position_quasirandom(width = .2)
+    ) +
+    geom_point(
+      alpha = .3,
+      position = ggbeeswarm::position_quasirandom(width = .2)
+    ) 
+}
+
+(f(p1) + f(p2)) / (f(p3) + f(p4))
+```
+
+I wonder if this is an artifact of our reference model. Let's use a data generation process that is slightly different and see if the effect remains.
+
+$$
+\begin{align*}
+&y_i \sim \mathcal{N}(\mathbb{X}\beta, 1) \\
+&\beta = \left(\beta_0, \beta_1, \cdots, \beta_{p_{rel}}, 0, 0, \cdots, 0 \right) \\
+&x_{\cdot, 1} = 1 \\ 
+&x_{i,j} \sim \mathcal{N}(0, 1) \ \ \ \ \  i \in \{1, \cdots, N\},\ j \in \{2, \cdots, p\}
+\end{align*}
+$$
+Basically, we will choose a coefficient vector with $p_{rel}$ non-zero terms (one of which is the intercept). The predictors will be mutually independent. For this example, we will sample the non-zero coefficients from an uniform on $[1, 5]$. The intercept will be $10$.
+
+```{r, max.height='100px'}
+set.seed(123)
+.beta <- c(1, runif(p_rel - 1, 50, 100), rep(0, p - p_rel))
+test_data <- generate_data_02(N=1e4)
+set.seed(123)
+simulation <- map(
+  1:100,
+  ~ simulate_reference_model_effect(
+    sim = .x, 
+    data_gen_method = generate_data_02,
+    gamma = 0.1,
+    test_data = test_data,
+    beta = .beta
+  )
+) %>% 
+  bind_rows(.id = "sim")
+```
+
+```{r}
+
+p1 <- simulation %>% 
+  pivot_longer(cols = contains('rmse')) %>% 
+  mutate(
+    name = case_when(
+      name == "rmse_ref" ~ "LASSO + ref",
+      name == "rmse_no_ref" ~"LASSO",
+      T ~ "Ref (SPCA)"
+    )
+  ) %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
+  labs(x = NULL, y = "RMSE")
+p2 <- simulation %>% 
+  pivot_longer(cols = contains('size')) %>% 
+  mutate(
+    name = case_when(
+      name == "size_ref" ~ "LASSO + ref",
+      name == "size_no_ref" ~"LASSO",
+      T ~ "Ref (SPCA)"
+    )
+  ) %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
+  labs(x = NULL, y = "# kept variables")
+p3 <- simulation %>% 
+  pivot_longer(cols = contains('tp')) %>% 
+  mutate(
+    name = case_when(
+      name == "tp_ref" ~ "LASSO + ref",
+      name == "tp_no_ref" ~"LASSO",
+      T ~ "Ref (SPCA)"
+    )
+  ) %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
+  labs(x = NULL, y = "# TP")
+p4 <- simulation %>% 
+  pivot_longer(cols = contains('fp')) %>% 
+  mutate(
+    name = case_when(
+      name == "fp_ref" ~ "LASSO + ref",
+      name == "fp_no_ref" ~"LASSO",
+      T ~ "Ref (SPCA)"
+    )
+  ) %>% 
+  ggplot(aes(name, value)) +
+  geom_boxplot(alpha = 0, width = .5, lwd = 1) +
+  labs(x = NULL, y = "# FP") 
+
+(p1 + p2) / (p3 + p4)
+```
 
 
